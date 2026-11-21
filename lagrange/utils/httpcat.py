@@ -225,8 +225,10 @@ class HttpCat:
         if conn_timeout:
             reader, writer = await asyncio.wait_for(asyncio.open_connection(*address, ssl=ssl), conn_timeout)
         else:
-            reader, writer = await asyncio.open_connection(*address, ssl=ssl)
-        resp = await cls._request(address[0], reader, writer, method, path, header, body, cookies, True, loop)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(*address, ssl=ssl), 20)
+        resp = await asyncio.wait_for(
+            cls._request(address[0], reader, writer, method, path, header, body, cookies, True, loop), 20
+        )
         _logger.debug(f"request({method})[{resp.code}]: {url}")
         if resp.code // 100 == 3 and follow_redirect and max_redirect > 0:
             return await cls.request(
@@ -247,21 +249,27 @@ class HttpCat:
                     conn_timeout,
                 )
             else:
-                reader, writer = await asyncio.open_connection(self.host, self.port, ssl=self.ssl)
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self.host, self.port, ssl=self.ssl),
+                    20,
+                )
             self._reader = reader
             self._writer = writer
             _logger.debug(f"connected to {self.host}:{self.port}")
 
-        resp = await self._request(
-            self.host,
-            self._reader,
-            self._writer,
-            method,
-            path,
-            self.header,
-            body,
-            self.cookie,
-            True,
+        resp = await asyncio.wait_for(
+            self._request(
+                self.host,
+                self._reader,
+                self._writer,
+                method,
+                path,
+                self.header,
+                body,
+                self.cookie,
+                True,
+            ),
+            20,
         )
         _logger.debug(
             f"send_request({method})[{resp.code}]: http{'s' if self.ssl else ''}://{self.host}:{self.port}{path}"
